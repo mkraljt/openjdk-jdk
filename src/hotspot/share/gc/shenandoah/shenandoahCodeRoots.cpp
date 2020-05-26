@@ -26,6 +26,7 @@
 #include "code/codeCache.hpp"
 #include "code/icBuffer.hpp"
 #include "code/nmethod.hpp"
+#include "gc/shenandoah/shenandoahClosures.inline.hpp"
 #include "gc/shenandoah/shenandoahCodeRoots.hpp"
 #include "gc/shenandoah/shenandoahEvacOOMHandler.hpp"
 #include "gc/shenandoah/shenandoahHeap.inline.hpp"
@@ -194,6 +195,7 @@ public:
   ShenandoahDisarmNMethodsTask() :
     AbstractGangTask("ShenandoahDisarmNMethodsTask"),
     _iterator(ShenandoahCodeRoots::table()) {
+    assert(SafepointSynchronize::is_at_safepoint(), "Only at a safepoint");
     MutexLocker mu(CodeCache_lock, Mutex::_no_safepoint_check_flag);
     _iterator.nmethods_do_begin();
   }
@@ -204,6 +206,7 @@ public:
   }
 
   virtual void work(uint worker_id) {
+    ShenandoahParallelWorkerSession worker_session(worker_id);
     _iterator.nmethods_do(&_cl);
   }
 };
@@ -270,7 +273,7 @@ public:
 
     // Heal oops and disarm
     if (_bs->is_armed(nm)) {
-      ShenandoahNMethod::heal_nmethod(nm);
+      ShenandoahNMethod::heal_nmethod_metadata(nm_data);
       _bs->disarm(nm);
     }
 
@@ -308,6 +311,7 @@ public:
 
   virtual void work(uint worker_id) {
     ICRefillVerifierMark mark(_verifier);
+    ShenandoahEvacOOMScope evac_scope;
     _iterator.nmethods_do(&_cl);
   }
 
